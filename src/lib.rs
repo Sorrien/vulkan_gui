@@ -36,6 +36,9 @@ use winit::{
 
 use crate::pipelines::PipelineLayout;
 
+extern crate winit;
+extern crate imgui;
+
 pub mod ash_bootstrap;
 pub mod base_vulkan;
 pub mod buffers;
