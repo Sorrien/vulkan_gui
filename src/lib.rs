@@ -240,7 +240,7 @@ impl VulkanEngine {
     ) -> Result<(), winit::error::EventLoopError> {
         let mut last_frame = Instant::now();
         let mut delta_time = Instant::now() - last_frame;
-        let min_tick_time = Duration::from_millis(1 / 120);
+        let min_tick_time = Duration::from_millis(29);
         let mut total_time_since_last_tick = delta_time;
         let mut num_ticks = 0;
 
@@ -302,11 +302,11 @@ impl VulkanEngine {
                     if total_time_since_last_tick >= min_tick_time {
                         total_time_since_last_tick = Duration::from_micros(0);
                         num_ticks += 1;
-                    }
 
-                    //don't attempt to draw a frame in window size is 0
-                    if size.height > 0 && size.width > 0 {
-                        self.draw(draw_data, &mut imgui_renderer);
+                        //don't attempt to draw a frame in window size is 0
+                        if size.height > 0 && size.width > 0 {
+                            self.draw(draw_data, &mut imgui_renderer);
+                        }
                     }
                 }
                 Event::WindowEvent {
