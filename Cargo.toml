@@ -21,9 +21,7 @@ chrono = "0.4"
 image = "0.24"
 obj = "0.10"
 rand = "0.8"
-gpu-allocator = { git = "https://github.com/Sorrien/gpu-allocator", features = [
-    "vulkan",
-] }
+gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
 imgui = { git = "https://github.com/imgui-rs/imgui-rs" }
 imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs" }
 imgui-rs-vulkan-renderer = { git = "https://github.com/Sorrien/imgui-rs-vulkan-renderer/", features = [
