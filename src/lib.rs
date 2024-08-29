@@ -68,6 +68,8 @@ impl VulkanGuiApp {
 }
 
 pub struct VulkanEngine {
+    pub is_right_mouse_button_pressed: bool,
+    pub is_left_mouse_button_pressed: bool,
     pub max_tick_time: u64,
     pub min_tick_time: u64,
     pub is_focused: bool,
@@ -140,6 +142,8 @@ impl VulkanEngine {
             is_focused: false,
             min_tick_time,
             max_tick_time,
+            is_right_mouse_button_pressed: false,
+            is_left_mouse_button_pressed: false,
         }
     }
 
@@ -299,6 +303,16 @@ impl VulkanEngine {
                             delta: (delta_x, delta_y),
                         },
                 } => {
+                    if self.is_focused
+                        && (self.is_left_mouse_button_pressed || self.is_right_mouse_button_pressed)
+                    {
+                        input_counter += 1;
+                    }
+                }
+                Event::DeviceEvent {
+                    device_id,
+                    event: DeviceEvent::MouseWheel { delta: _ },
+                } => {
                     if self.is_focused {
                         input_counter += 1;
                     }
@@ -308,6 +322,11 @@ impl VulkanEngine {
                     event: DeviceEvent::Button { button, state },
                 } => {
                     if self.is_focused {
+                        if button == 0 {
+                            self.is_left_mouse_button_pressed = state.is_pressed();
+                        } else if button == 1 {
+                            self.is_right_mouse_button_pressed = state.is_pressed();
+                        }
                         input_counter += 1;
                     }
                 }
