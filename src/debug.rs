@@ -11,11 +11,7 @@ pub struct DebugMessenger {
 }
 
 impl DebugMessenger {
-    pub fn new(
-        entry: &Entry,
-        instance: Arc<crate::ash_bootstrap::Instance>,
-        use_debug: bool,
-    ) -> Self {
+    pub fn new(entry: &Entry, instance: Arc<ash_bootstrap::Instance>, use_debug: bool) -> Self {
         let (debug_utils, debug_messenger) = debug_utils(entry, &instance.handle, use_debug);
         Self {
             debug_messenger,

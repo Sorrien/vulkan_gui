@@ -6,24 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ash::{
-    //extensions::khr::Swapchain,
-    util::read_spv,
-    vk,
-    Entry,
-};
-use ash_bootstrap::{
-    Instance, InstanceBuilder, LogicalDevice, PhysicalDeviceSelector, QueueFamilyIndices,
-    VulkanSurface,
-};
-use debug::DebugMessenger;
-use gpu_allocator::{vulkan::*, MemoryLocation};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use swapchain::{MySwapchain, SwapchainBuilder, SwapchainSupportDetails};
-use winit::window::Window;
-
 use crate::{
-    ash_bootstrap,
     buffers::AllocatedBuffer,
     debug,
     descriptors::{
@@ -32,6 +15,21 @@ use crate::{
     },
     swapchain, AllocatedImage,
 };
+use ash::{
+    //extensions::khr::Swapchain,
+    util::read_spv,
+    vk,
+    Entry,
+};
+use ash_bootstrap::{
+    self, swapchain::SwapchainSupportDetails, Instance, InstanceBuilder, LogicalDevice,
+    PhysicalDeviceSelector, QueueFamilyIndices, VulkanSurface,
+};
+use debug::DebugMessenger;
+use gpu_allocator::{vulkan::*, MemoryLocation};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use swapchain::{MySwapchain, SwapchainBuilder};
+use winit::window::Window;
 
 #[derive(Debug)]
 pub enum ShaderModuleError {
@@ -70,6 +68,7 @@ impl BaseVulkanState {
             .api_version(vk::API_VERSION_1_3)
             .raw_display_handle(window.raw_display_handle().unwrap())
             .enable_validation_layers(enable_validation_layers)
+            .debug_utils(debug::create_debug_info())
             .build();
 
         let debug_messenger =

@@ -77,6 +77,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash_bootstrap"
+version = "0.1.0"
+source = "git+https://github.com/Sorrien/ash_bootstrap/#ac1ae17f64813ffaffaa20845e6d3dec12149f73"
+dependencies = [
+ "ash",
+ "ash-window",
+ "raw-window-handle",
+ "vulkan_has_required_features",
+ "winit",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -479,7 +491,7 @@ checksum = "1a5c6c585bc94aaf2c7b51dd4c2ba22680844aba4c687be581871a6f518c5742"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -533,7 +545,7 @@ dependencies = [
  "inflections",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -932,7 +944,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1253,7 +1265,7 @@ checksum = "a5831b979fd7b5439637af1752d535ff49f4860c0f341d1baeb6faf0f4242170"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1336,6 +1348,17 @@ dependencies = [
 
 [[package]]
 name = "syn"
+version = "1.0.109"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "syn"
 version = "2.0.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578e081a14e0cefc3279b0472138c513f37b41a08d5a3cca9b6e4e8ceb6cd525"
@@ -1362,7 +1385,7 @@ checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1442,6 +1465,7 @@ version = "0.1.0"
 dependencies = [
  "ash",
  "ash-window",
+ "ash_bootstrap",
  "chrono",
  "gltf",
  "gpu-allocator",
@@ -1453,6 +1477,15 @@ dependencies = [
  "raw-window-handle",
  "shaderc",
  "winit",
+]
+
+[[package]]
+name = "vulkan_has_required_features"
+version = "0.1.0"
+source = "git+https://github.com/Sorrien/ash_bootstrap/#ac1ae17f64813ffaffaa20845e6d3dec12149f73"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -1493,7 +1526,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
  "wasm-bindgen-shared",
 ]
 
@@ -1527,7 +1560,7 @@ checksum = "afc340c74d9005395cf9dd098506f7f44e38f2b4a21c6aaacf9a105ea5e1e836"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -1623,7 +1656,7 @@ checksum = "2bbd5b46c938e506ecbce286b6628a02171d56153ba733b6c741fc627ec9579b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1634,7 +1667,7 @@ checksum = "053c4c462dc91d3b1504c6fe5a726dd15e216ba718e84a0e46a88fbe5ded3515"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]
@@ -1958,7 +1991,7 @@ checksum = "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.76",
 ]
 
 [[package]]

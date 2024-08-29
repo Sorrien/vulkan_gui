@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
-use ash::{vk, khr::swapchain::Device as Swapchain};
+use ash::{khr::swapchain::Device as Swapchain, vk};
 
-use crate::ash_bootstrap::{Instance, LogicalDevice, QueueFamilyIndices, VulkanSurface};
+use ash_bootstrap::{
+    swapchain::SwapchainSupportDetails, Instance, LogicalDevice, QueueFamilyIndices, VulkanSurface,
+};
 
 pub struct MySwapchain {
     device: Arc<LogicalDevice>,
@@ -302,41 +304,5 @@ impl SwapchainBuilder {
         }
         .expect("failed to create image view!");
         image_view
-    }
-}
-
-#[derive(Clone)]
-pub struct SwapchainSupportDetails {
-    pub capabilities: vk::SurfaceCapabilitiesKHR,
-    pub formats: Vec<vk::SurfaceFormatKHR>,
-    pub present_modes: Vec<vk::PresentModeKHR>,
-}
-
-impl SwapchainSupportDetails {
-    pub fn new(device: &vk::PhysicalDevice, surface: &VulkanSurface) -> Self {
-        let capabilities = unsafe {
-            surface
-                .loader
-                .get_physical_device_surface_capabilities(*device, surface.handle)
-        }
-        .expect("failed to get surface capabilites!");
-        let formats = unsafe {
-            surface
-                .loader
-                .get_physical_device_surface_formats(*device, surface.handle)
-        }
-        .expect("failed to get device surface formats!");
-        let present_modes = unsafe {
-            surface
-                .loader
-                .get_physical_device_surface_present_modes(*device, surface.handle)
-        }
-        .expect("failed to get device surface present modes!");
-
-        Self {
-            capabilities,
-            formats,
-            present_modes,
-        }
     }
 }

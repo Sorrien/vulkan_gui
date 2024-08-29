@@ -21,7 +21,6 @@ use winit::{
 pub use imgui::*;
 pub use winit::*;
 
-pub mod ash_bootstrap;
 pub mod base_vulkan;
 pub mod buffers;
 pub mod debug;

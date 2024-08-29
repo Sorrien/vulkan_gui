@@ -1,7 +1,6 @@
 use ash::vk;
+use ash_bootstrap::LogicalDevice;
 use std::sync::Arc;
-
-use crate::ash_bootstrap::LogicalDevice;
 
 pub struct Descriptor {
     pub set: vk::DescriptorSet,

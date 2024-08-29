@@ -10,7 +10,7 @@ use gpu_allocator::{
     MemoryLocation,
 };
 
-use crate::ash_bootstrap::LogicalDevice;
+use ash_bootstrap::LogicalDevice;
 
 pub struct AllocatedBuffer {
     device: Arc<LogicalDevice>,
