@@ -1,16 +1,16 @@
 use std::{
-    ffi::{CStr, CString},
+    ffi::CString,
     fs::File,
-    mem::{size_of, ManuallyDrop},
+    mem::ManuallyDrop,
     path::Path,
     sync::{Arc, Mutex},
 };
 
 use ash::{
     //extensions::khr::Swapchain,
-    khr::swapchain::Device as Swapchain,
-    util::{read_spv, Align},
-    vk, Entry,
+    util::read_spv,
+    vk,
+    Entry,
 };
 use ash_bootstrap::{
     Instance, InstanceBuilder, LogicalDevice, PhysicalDeviceSelector, QueueFamilyIndices,
@@ -24,15 +24,13 @@ use winit::window::Window;
 
 use crate::{
     ash_bootstrap,
-    buffers::{copy_to_cpu_buffer, AllocatedBuffer, GPUDrawPushConstants, GPUMeshBuffers, Vertex},
+    buffers::AllocatedBuffer,
     debug,
     descriptors::{
-        Descriptor, DescriptorAllocator, DescriptorAllocatorGrowable, DescriptorLayout,
-        DescriptorLayoutBuilder, DescriptorWriter, PoolSizeRatio,
+        Descriptor, DescriptorAllocatorGrowable, DescriptorLayout, DescriptorLayoutBuilder,
+        DescriptorWriter, PoolSizeRatio,
     },
-    pipelines::{Pipeline, PipelineBuilder, PipelineLayout},
-    swapchain,
-    AllocatedImage, ComputeEffect, ComputePushConstants, GPUSceneData,
+    swapchain, AllocatedImage,
 };
 
 #[derive(Debug)]
@@ -228,13 +226,6 @@ impl BaseVulkanState {
                 let mut frame_descriptors = DescriptorAllocatorGrowable::new(self.device.clone());
                 frame_descriptors.init(1000, frame_sizes);
 
-                let gpu_scene_data_buffer = self.create_buffer(
-                    &format!("gpuscenedata buffer {}", i),
-                    size_of::<GPUSceneData>(),
-                    vk::BufferUsageFlags::UNIFORM_BUFFER,
-                    MemoryLocation::CpuToGpu,
-                );
-
                 FrameData::new(
                     self.device.clone(),
                     command_pool,
@@ -243,7 +234,6 @@ impl BaseVulkanState {
                     swapchain_semaphore,
                     render_semaphore,
                     frame_descriptors,
-                    gpu_scene_data_buffer,
                 )
             })
             .collect::<Vec<_>>()
@@ -484,164 +474,6 @@ impl BaseVulkanState {
         } */
     }
 
-    pub fn init_pipelines(
-        &mut self,
-        draw_image_descriptor_layout: vk::DescriptorSetLayout,
-    ) -> (Vec<ComputeEffect>, Arc<PipelineLayout>) {
-        self.init_background_pipelines(draw_image_descriptor_layout)
-    }
-
-    pub fn init_background_pipelines(
-        &mut self,
-        draw_image_descriptor_layout: vk::DescriptorSetLayout,
-    ) -> (Vec<ComputeEffect>, Arc<PipelineLayout>) {
-        let push_constant = vk::PushConstantRange::default()
-            .offset(0)
-            .size(size_of::<ComputePushConstants>() as u32)
-            .stage_flags(vk::ShaderStageFlags::COMPUTE);
-
-        let set_layouts = [draw_image_descriptor_layout];
-        let push_constant_ranges = [push_constant];
-        let compute_layout_create_info = vk::PipelineLayoutCreateInfo::default()
-            .set_layouts(&set_layouts)
-            .push_constant_ranges(&push_constant_ranges);
-        /*
-        let compute_effect_pipeline_layout = unsafe {
-            self.device
-                .handle
-                .create_pipeline_layout(&compute_layout, None)
-        }
-        .expect("failed to create gradient pipeline layout!"); */
-        let compute_effect_pipeline_layout =
-            PipelineLayout::new(self.device.clone(), compute_layout_create_info)
-                .expect("failed to create compute effect pipeline layout!");
-
-        let gradient_shader = self
-            .create_shader_module("shaders/gradient.comp.spv")
-            .expect("failed to load shader module!");
-        let sky_shader = self
-            .create_shader_module("shaders/sky.comp.spv")
-            .expect("failed to load shader module!");
-
-        let shader_entry_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
-
-        let stage_info = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::COMPUTE)
-            .module(gradient_shader)
-            .name(shader_entry_name);
-
-        let compute_pipeline_create_info = vk::ComputePipelineCreateInfo::default()
-            .layout(compute_effect_pipeline_layout.handle)
-            .stage(stage_info);
-
-        let mut sky_pipeline_create_info = compute_pipeline_create_info.clone();
-        sky_pipeline_create_info.stage.module = sky_shader;
-        let create_infos = [compute_pipeline_create_info, sky_pipeline_create_info];
-
-        let pipelines = unsafe {
-            self.device.handle.create_compute_pipelines(
-                vk::PipelineCache::null(),
-                &create_infos,
-                None,
-            )
-        }
-        .expect("failed to create gradient pipeline!");
-        let gradient_pipeline = pipelines[0];
-        let sky_pipeline = pipelines[1];
-
-        let gradient = ComputeEffect {
-            name: String::from("gradient"),
-            pipeline: Pipeline::new(
-                self.device.clone(),
-                gradient_pipeline,
-                compute_effect_pipeline_layout.clone(),
-            ),
-            data: ComputePushConstants {
-                data1: glam::Vec4::new(1., 0., 0., 1.),
-                data2: glam::Vec4::new(0., 0., 1., 1.),
-                data3: glam::Vec4::ZERO,
-                data4: glam::Vec4::ZERO,
-            },
-        };
-
-        let sky = ComputeEffect {
-            name: String::from("sky"),
-            pipeline: Pipeline::new(
-                self.device.clone(),
-                sky_pipeline,
-                compute_effect_pipeline_layout.clone(),
-            ),
-            data: ComputePushConstants {
-                data1: glam::Vec4::new(0.1, 0.2, 0.4, 0.97),
-                data2: glam::Vec4::ZERO,
-                data3: glam::Vec4::ZERO,
-                data4: glam::Vec4::ZERO,
-            },
-        };
-
-        unsafe {
-            self.device
-                .handle
-                .destroy_shader_module(gradient_shader, None);
-            self.device.handle.destroy_shader_module(sky_shader, None);
-        };
-
-        (vec![gradient, sky], compute_effect_pipeline_layout)
-    }
-
-    pub fn init_marching_cubes_pipeline(&mut self, desc_layout: &DescriptorLayout) -> Pipeline {
-        let set_layouts = [desc_layout.handle];
-        let push_constant_ranges = [];
-        let compute_layout_create_info = vk::PipelineLayoutCreateInfo::default()
-            .set_layouts(&set_layouts)
-            .push_constant_ranges(&push_constant_ranges);
-
-        let compute_effect_pipeline_layout =
-            PipelineLayout::new(self.device.clone(), compute_layout_create_info)
-                .expect("failed to create compute effect pipeline layout!");
-
-        let marching_cube_shader = self
-            .create_shader_module("shaders/marching_cubes.comp.spv")
-            .expect("failed to load shader module!");
-
-        let shader_entry_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"main\0") };
-
-        let stage_info = vk::PipelineShaderStageCreateInfo::default()
-            .stage(vk::ShaderStageFlags::COMPUTE)
-            .module(marching_cube_shader)
-            .name(shader_entry_name);
-
-        let compute_pipeline_create_info = vk::ComputePipelineCreateInfo::default()
-            .layout(compute_effect_pipeline_layout.handle)
-            .stage(stage_info);
-
-        let create_infos = [compute_pipeline_create_info];
-
-        let pipelines = unsafe {
-            self.device.handle.create_compute_pipelines(
-                vk::PipelineCache::null(),
-                &create_infos,
-                None,
-            )
-        }
-        .expect("failed to create gradient pipeline!");
-        let vk_pipeline = pipelines[0];
-
-        let pipeline = Pipeline::new(
-            self.device.clone(),
-            vk_pipeline,
-            compute_effect_pipeline_layout,
-        );
-
-        unsafe {
-            self.device
-                .handle
-                .destroy_shader_module(marching_cube_shader, None);
-        };
-
-        pipeline
-    }
-
     pub fn init_descriptors(
         &mut self,
         global_descriptor_allocator: &mut DescriptorAllocatorGrowable,
@@ -700,29 +532,6 @@ impl BaseVulkanState {
             draw_image_descriptors,
             draw_image_descriptor_layout,
         )
-    }
-
-    pub fn init_gpu_scene_descriptor_layout(&self) -> DescriptorLayout {
-        let layout = DescriptorLayoutBuilder::new()
-            .add_binding(0, vk::DescriptorType::UNIFORM_BUFFER)
-            .build(
-                self.device.clone(),
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            )
-            .expect("failed to build gpu scene desc layout!");
-
-        DescriptorLayout::new(self.device.clone(), layout)
-    }
-
-    pub fn init_marching_cubes_descriptor_layout(&self) -> DescriptorLayout {
-        let layout = DescriptorLayoutBuilder::new()
-            .add_binding(0, vk::DescriptorType::STORAGE_BUFFER)
-            .add_binding(1, vk::DescriptorType::STORAGE_BUFFER)
-            .add_binding(2, vk::DescriptorType::STORAGE_BUFFER)
-            .build(self.device.clone(), vk::ShaderStageFlags::COMPUTE)
-            .expect("failed to create marching cube set layout");
-
-        DescriptorLayout::new(self.device.clone(), layout)
     }
 
     pub fn init_immediate_command(&self) -> ImmediateCommand {
@@ -787,7 +596,6 @@ pub struct FrameData {
     pub swapchain_semaphore: vk::Semaphore,
     pub render_semaphore: vk::Semaphore,
     pub frame_descriptors: DescriptorAllocatorGrowable,
-    pub gpu_scene_data_buffer: AllocatedBuffer,
 }
 
 impl FrameData {
@@ -799,7 +607,6 @@ impl FrameData {
         swapchain_semaphore: vk::Semaphore,
         render_semaphore: vk::Semaphore,
         frame_descriptors: DescriptorAllocatorGrowable,
-        gpu_scene_data_buffer: AllocatedBuffer,
     ) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
             device,
@@ -809,7 +616,6 @@ impl FrameData {
             swapchain_semaphore,
             render_semaphore,
             frame_descriptors,
-            gpu_scene_data_buffer,
         }))
     }
 }

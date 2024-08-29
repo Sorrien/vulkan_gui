@@ -1,40 +1,22 @@
 use std::{
-    collections::HashMap,
     mem::{size_of, ManuallyDrop},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use ash::vk::{self, SamplerAddressMode, SamplerMipmapMode};
+use ash::vk::{self};
 use ash_bootstrap::LogicalDevice;
 use base_vulkan::{BaseVulkanState, FrameData};
-use buffers::{
-    copy_buffer_regions_to_image, copy_buffer_to_image, copy_to_cpu_buffer,
-    create_buffer_copy_region, write_to_cpu_buffer, AllocatedBuffer, GPUDrawPushConstants,
-    GPUMeshBuffers, MeshAsset, Vertex,
-};
-use camera::Camera;
-use descriptors::{
-    Descriptor, DescriptorAllocator, DescriptorAllocatorGrowable, DescriptorLayout,
-    DescriptorLayoutBuilder, DescriptorWriter,
-};
-use glam::Vec3;
+use buffers::{copy_buffer_to_image, copy_to_cpu_buffer};
+use descriptors::{Descriptor, DescriptorAllocatorGrowable, DescriptorLayout};
 use gpu_allocator::{vulkan::*, MemoryLocation};
-use hecs::{Entity, World};
-use image::RgbaImage;
-use ktx::load_ktx;
-use pipelines::{Pipeline, PipelineBuilder};
-use skybox::Skybox;
 use swapchain::MySwapchain;
 use vk_imgui::init_imgui;
 use winit::{
-    event::{DeviceEvent, Event, KeyEvent, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::EventLoop,
-    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
-
-use crate::pipelines::PipelineLayout;
 
 pub use imgui::*;
 pub use winit::*;
@@ -42,13 +24,8 @@ pub use winit::*;
 pub mod ash_bootstrap;
 pub mod base_vulkan;
 pub mod buffers;
-pub mod camera;
 pub mod debug;
 pub mod descriptors;
-pub mod ktx;
-pub mod loader;
-pub mod pipelines;
-pub mod skybox;
 pub mod swapchain;
 pub mod vk_imgui;
 
@@ -82,17 +59,11 @@ pub struct VulkanEngine {
     pub draw_extent: vk::Extent2D,
     pub render_scale: f32,
     pub resize_requested: bool,
-    current_background_effect: usize,
     frame_number: usize,
-    gpu_scene_data_descriptor_layout: DescriptorLayout,
-    meshes: Vec<Arc<MeshAsset>>,
     immediate_command: base_vulkan::ImmediateCommand,
-    background_effects: Vec<ComputeEffect>,
-    background_effect_pipeline_layout: Arc<PipelineLayout>,
     draw_image_descriptor: Descriptor,
     global_descriptor_allocator: descriptors::DescriptorAllocatorGrowable,
     draw_image: AllocatedImage,
-    depth_image: AllocatedImage,
     frames: Vec<Arc<Mutex<FrameData>>>,
     pub swapchain: MySwapchain,
     base: BaseVulkanState,
@@ -127,36 +98,12 @@ impl VulkanEngine {
             vk::ImageCreateFlags::empty(),
         );
 
-        let depth_image_format = vk::Format::D32_SFLOAT;
-
-        let depth_image_allocated = base.create_allocated_image(
-            draw_image_extent.into(),
-            depth_image_format,
-            vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
-            gpu_allocator::MemoryLocation::GpuOnly,
-            1,
-            1,
-            vk::SampleCountFlags::TYPE_1,
-            vk::ImageCreateFlags::empty(),
-        );
-
         let mut global_descriptor_allocator = DescriptorAllocatorGrowable::new(base.device.clone());
 
         let draw_image_descriptor =
             base.init_descriptors(&mut global_descriptor_allocator, &draw_image_allocated);
 
-        let gpu_scene_data_descriptor_layout = base.init_gpu_scene_descriptor_layout();
-
-        let (background_effects, background_effect_pipeline_layout) =
-            base.init_pipelines(draw_image_descriptor.layout.handle);
-
         let immediate_command = base.init_immediate_command();
-        let meshes = vec![];
-
-        let default_sampler_linear = Sampler::new(vk::Sampler::null(), base.device.clone());
-        let default_sampler_nearest = Sampler::new(vk::Sampler::null(), base.device.clone());
-        let cubemap_sampler = Sampler::new(vk::Sampler::null(), base.device.clone());
 
         Self {
             base,
@@ -166,16 +113,10 @@ impl VulkanEngine {
             swapchain,
             global_descriptor_allocator,
             draw_image_descriptor,
-            background_effects,
-            background_effect_pipeline_layout,
             immediate_command,
-            current_background_effect: 1,
-            meshes,
-            depth_image: depth_image_allocated,
             resize_requested: false,
             draw_extent: draw_image_extent,
             render_scale: 1.,
-            gpu_scene_data_descriptor_layout,
         }
     }
 
@@ -421,39 +362,19 @@ impl VulkanEngine {
         .expect("failed to begin command buffer!");
 
         let swapchain_image = swapchain.swapchain_images[swapchain_image_index as usize];
-        self.base.transition_image_layout(
-            cmd,
-            self.draw_image.image,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::GENERAL,
-        );
 
-        self.draw_background(cmd);
-
-        self.base.transition_image_layout(
-            cmd,
-            self.draw_image.image,
-            vk::ImageLayout::GENERAL,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-        );
-        self.base.transition_image_layout(
-            cmd,
-            self.depth_image.image,
-            vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL,
-        );
-
-        self.base.transition_image_layout(
-            cmd,
-            self.draw_image.image,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-        );
         self.base.transition_image_layout(
             cmd,
             swapchain_image,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        );
+
+        self.base.transition_image_layout(
+            cmd,
+            self.draw_image.image,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
         );
 
         copy_image_to_image(
@@ -589,47 +510,6 @@ impl VulkanEngine {
             .command_buffer_infos(command_buffer_infos)
     }
 
-    pub fn draw_background(&self, cmd: vk::CommandBuffer) {
-        let cur_effect = &self.background_effects[self.current_background_effect];
-
-        unsafe {
-            self.base.device.handle.cmd_bind_pipeline(
-                cmd,
-                vk::PipelineBindPoint::COMPUTE,
-                cur_effect.pipeline.pipeline,
-            )
-        }
-        let descriptor_sets = [self.draw_image_descriptor.set];
-        unsafe {
-            self.base.device.handle.cmd_bind_descriptor_sets(
-                cmd,
-                vk::PipelineBindPoint::COMPUTE,
-                cur_effect.pipeline.pipeline_layout.handle,
-                0,
-                &descriptor_sets,
-                &[],
-            )
-        };
-
-        cmd_push_constants(
-            self.base.device.clone(),
-            cmd,
-            cur_effect.pipeline.pipeline_layout.clone(),
-            cur_effect.data,
-            vk::ShaderStageFlags::COMPUTE,
-            0,
-        );
-
-        unsafe {
-            self.base.device.handle.cmd_dispatch(
-                cmd,
-                (self.draw_extent.width as f32 / 16.).ceil() as u32,
-                (self.draw_extent.height as f32 / 16.).ceil() as u32,
-                1,
-            );
-        }
-    }
-
     pub fn draw_imgui(
         &self,
         cmd: vk::CommandBuffer,
@@ -725,119 +605,6 @@ impl VulkanEngine {
             .expect("failed to wait for imm submit fence!");
     }
 
-    fn upload_mesh_gpu_only(&self, indices: Vec<u32>, vertices: Vec<Vertex>) -> GPUMeshBuffers {
-        let vertex_buffer_size = vertices.len() * size_of::<Vertex>();
-        let index_buffer_size = indices.len() * size_of::<u32>();
-
-        let vertex_buffer = self.base.create_buffer(
-            "vertex buffer",
-            vertex_buffer_size,
-            vk::BufferUsageFlags::STORAGE_BUFFER
-                | vk::BufferUsageFlags::TRANSFER_DST
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            MemoryLocation::GpuOnly,
-        );
-
-        let info = vk::BufferDeviceAddressInfo::default().buffer(vertex_buffer.buffer);
-        let vertex_buffer_address: vk::DeviceAddress =
-            unsafe { self.base.device.handle.get_buffer_device_address(&info) };
-
-        let index_buffer = self.base.create_buffer(
-            "index buffer",
-            index_buffer_size,
-            vk::BufferUsageFlags::INDEX_BUFFER | vk::BufferUsageFlags::TRANSFER_DST,
-            MemoryLocation::GpuOnly,
-        );
-
-        let new_surface = GPUMeshBuffers {
-            index_buffer,
-            vertex_buffer,
-            vertex_buffer_address,
-        };
-
-        let vertex_staging_buffer = self.base.create_buffer(
-            "vertex_staging_buffer",
-            vertex_buffer_size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::CpuToGpu,
-        );
-        copy_to_cpu_buffer(&vertex_staging_buffer, vertex_buffer_size as u64, &vertices);
-
-        let index_staging_buffer = self.base.create_buffer(
-            "index_staging_buffer_staging_buffer",
-            index_buffer_size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::CpuToGpu,
-        );
-
-        copy_to_cpu_buffer(&index_staging_buffer, index_buffer_size as u64, &indices);
-
-        self.immediate_submit(|cmd| {
-            let vertex_copy = vk::BufferCopy::default()
-                .dst_offset(0)
-                .src_offset(0)
-                .size(vertex_buffer_size as u64);
-            let vertex_regions = [vertex_copy];
-            unsafe {
-                self.base.device.handle.cmd_copy_buffer(
-                    cmd,
-                    vertex_staging_buffer.buffer,
-                    new_surface.vertex_buffer.buffer,
-                    &vertex_regions,
-                )
-            };
-
-            let index_copy = vk::BufferCopy::default()
-                .dst_offset(0)
-                .src_offset(0)
-                .size(index_buffer_size as u64);
-            let index_regions = [index_copy];
-            unsafe {
-                self.base.device.handle.cmd_copy_buffer(
-                    cmd,
-                    index_staging_buffer.buffer,
-                    new_surface.index_buffer.buffer,
-                    &index_regions,
-                )
-            };
-        });
-
-        new_surface
-    }
-
-    fn upload_mesh_cpu_to_gpu(&self, indices: Vec<u32>, vertices: Vec<Vertex>) -> GPUMeshBuffers {
-        let vertex_buffer_size = vertices.len() * size_of::<Vertex>();
-        let index_buffer_size = indices.len() * size_of::<u32>();
-
-        let vertex_buffer = self.base.create_buffer(
-            "vertex buffer",
-            vertex_buffer_size,
-            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            MemoryLocation::CpuToGpu,
-        );
-
-        let info = vk::BufferDeviceAddressInfo::default().buffer(vertex_buffer.buffer);
-        let vertex_buffer_address: vk::DeviceAddress =
-            unsafe { self.base.device.handle.get_buffer_device_address(&info) };
-
-        let index_buffer = self.base.create_buffer(
-            "index buffer",
-            index_buffer_size,
-            vk::BufferUsageFlags::INDEX_BUFFER,
-            MemoryLocation::CpuToGpu,
-        );
-
-        copy_to_cpu_buffer(&vertex_buffer, vertex_buffer_size as u64, &vertices);
-        copy_to_cpu_buffer(&index_buffer, index_buffer_size as u64, &indices);
-
-        let new_surface = GPUMeshBuffers {
-            index_buffer,
-            vertex_buffer,
-            vertex_buffer_address,
-        };
-        new_surface
-    }
-
     pub fn create_allocated_texture_image<T>(
         &mut self,
         data: &[T],
@@ -888,79 +655,6 @@ impl VulkanEngine {
                 upload_buffer.buffer,
                 allocated_image.image,
                 extent,
-            );
-
-            self.base.transition_image_layout(
-                cmd,
-                allocated_image.image,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            );
-        });
-
-        allocated_image
-    }
-
-    pub fn create_allocated_texture_image_cubemap<T>(
-        &mut self,
-        data: &[T],
-        extent: vk::Extent3D,
-        format: vk::Format,
-        tiling: vk::ImageTiling,
-        usage: vk::ImageUsageFlags,
-        memory_location: gpu_allocator::MemoryLocation,
-        mip_levels: u32,
-        num_samples: vk::SampleCountFlags,
-    ) -> AllocatedImage
-    where
-        T: Copy,
-    {
-        let data_size = size_of::<T>() * data.len(); //extent.depth * extent.width * extent.height;
-        let upload_buffer = self.base.create_buffer(
-            "texture upload buffer",
-            data_size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            MemoryLocation::CpuToGpu,
-        );
-
-        copy_to_cpu_buffer(&upload_buffer, data_size as u64, &data);
-
-        let faces = 6;
-
-        let allocated_image = self.base.create_allocated_image(
-            extent,
-            format,
-            tiling,
-            usage | vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC,
-            memory_location,
-            mip_levels,
-            faces,
-            num_samples,
-            vk::ImageCreateFlags::CUBE_COMPATIBLE,
-        );
-
-        let mut buffer_copy_regions = vec![];
-
-        for face in 0..faces {
-            let offset = face * extent.width * extent.height * size_of::<T>() as u32 * 4; //4 for rgba channels
-            let buffer_copy_region = create_buffer_copy_region(extent, offset as u64, 0, face);
-            buffer_copy_regions.push(buffer_copy_region);
-        }
-
-        self.immediate_submit(|cmd| {
-            self.base.transition_image_layout(
-                cmd,
-                allocated_image.image,
-                vk::ImageLayout::UNDEFINED,
-                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            );
-
-            copy_buffer_regions_to_image(
-                cmd,
-                self.base.device.clone(),
-                upload_buffer.buffer,
-                allocated_image.image,
-                &buffer_copy_regions,
             );
 
             self.base.transition_image_layout(
@@ -1076,398 +770,8 @@ pub fn copy_image_to_image(
     unsafe { device.handle.cmd_blit_image2(cmd, &blit_info) };
 }
 
-#[derive(Copy, Clone)]
-pub struct ComputePushConstants {
-    pub data1: glam::Vec4,
-    pub data2: glam::Vec4,
-    pub data3: glam::Vec4,
-    pub data4: glam::Vec4,
-}
-
 /// Return a `&[u8]` for any sized object passed in.
 pub unsafe fn any_as_u8_slice<T: Sized>(any: &T) -> &[u8] {
     let ptr = (any as *const T) as *const u8;
     std::slice::from_raw_parts(ptr, std::mem::size_of::<T>())
-}
-
-pub struct ComputeEffect {
-    pub name: String,
-    pub pipeline: Pipeline,
-    pub data: ComputePushConstants,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Default)]
-pub struct GPUSceneData {
-    view: glam::Mat4,
-    proj: glam::Mat4,
-    viewproj: glam::Mat4,
-    ambientColor: glam::Vec4,
-    sunlightDirection: glam::Vec4,
-    sunlightColor: glam::Vec4,
-}
-
-pub struct RenderObject {
-    index_count: u32,
-    first_index: u32,
-    index_buffer: vk::Buffer,
-
-    material: Arc<MaterialInstance>,
-    transform: glam::Mat4,
-    vertex_buffer_address: vk::DeviceAddress,
-}
-
-pub struct DrawContext {
-    skybox_surfaces: Vec<RenderObject>,
-    opaque_surfaces: Vec<RenderObject>,
-    transparent_surfaces: Vec<RenderObject>,
-}
-
-impl DrawContext {
-    pub fn new() -> Self {
-        Self {
-            skybox_surfaces: Vec::new(),
-            opaque_surfaces: Vec::new(),
-            transparent_surfaces: Vec::new(),
-        }
-    }
-
-    pub fn clear_context(&mut self) {
-        self.skybox_surfaces.clear();
-        self.opaque_surfaces.clear();
-        self.transparent_surfaces.clear();
-    }
-}
-
-#[derive(PartialEq)]
-pub struct MaterialInstance {
-    pipeline: Arc<Pipeline>,
-    material_set: vk::DescriptorSet,
-    pass_type: MaterialPass,
-}
-
-#[derive(PartialEq, Clone, Copy)]
-pub enum MaterialPass {
-    MainColor = 1,
-    Transparent = 2,
-    Other = 3,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Default)]
-pub struct MaterialConstants {
-    colorFactors: glam::Vec4,
-    metal_rough_factors: glam::Vec4,
-    //padding, we need it anyway for uniform buffers
-    extra: [glam::Vec4; 14],
-}
-
-pub struct MaterialResources<'a> {
-    color_image: &'a AllocatedImage,
-    color_sampler: &'a Sampler,
-    metal_rough_image: &'a AllocatedImage,
-    metal_rough_sampler: &'a Sampler,
-    data_buffer: vk::Buffer,
-    data_buffer_offset: u64,
-}
-
-pub struct GLTFMetallicRoughness {
-    opaque_pipeline: Arc<Pipeline>,
-    transparent_pipeline: Arc<Pipeline>,
-    material_layout: DescriptorLayout,
-    material_constants_buffer: AllocatedBuffer,
-}
-
-impl GLTFMetallicRoughness {
-    pub fn new(engine: &VulkanEngine, material_constants_buffer: AllocatedBuffer) -> Self {
-        let material_layout = DescriptorLayoutBuilder::new()
-            .add_binding(0, vk::DescriptorType::UNIFORM_BUFFER)
-            .add_binding(1, vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .add_binding(2, vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .build(
-                engine.base.device.clone(),
-                vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT,
-            )
-            .expect("failed to create material set layout");
-
-        let (opaque_pipeline, transparent_pipeline) =
-            Self::build_pipelines(engine, material_layout);
-
-        Self {
-            opaque_pipeline: Arc::new(opaque_pipeline),
-            transparent_pipeline: Arc::new(transparent_pipeline),
-            material_layout: DescriptorLayout::new(engine.base.device.clone(), material_layout),
-            material_constants_buffer,
-        }
-    }
-
-    pub fn build_pipelines(
-        engine: &VulkanEngine,
-        material_layout: vk::DescriptorSetLayout,
-    ) -> (Pipeline, Pipeline) {
-        let mesh_frag_shader = engine
-            .base
-            .create_shader_module("shaders/mesh.frag.spv")
-            .expect("failed to load shader module!");
-        let mesh_vert_shader = engine
-            .base
-            .create_shader_module("shaders/mesh.vert.spv")
-            .expect("failed to load shader module!");
-
-        let matrix_range = vk::PushConstantRange::default()
-            .offset(0)
-            .size(size_of::<GPUDrawPushConstants>() as u32)
-            .stage_flags(vk::ShaderStageFlags::VERTEX);
-
-        let layouts = [
-            engine.gpu_scene_data_descriptor_layout.handle,
-            material_layout,
-        ];
-
-        let push_constant_ranges = [matrix_range];
-        let mesh_layout_info = vk::PipelineLayoutCreateInfo::default()
-            .push_constant_ranges(&push_constant_ranges)
-            .set_layouts(&layouts);
-
-        let new_layout = PipelineLayout::new(engine.base.device.clone(), mesh_layout_info)
-            .expect("failed to create pipeline layout!");
-
-        let pipeline_builder = PipelineBuilder::new(new_layout)
-            .set_shaders(mesh_vert_shader, mesh_frag_shader)
-            .set_input_topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .set_polygon_mode(vk::PolygonMode::FILL)
-            .set_cull_mode(vk::CullModeFlags::FRONT, vk::FrontFace::CLOCKWISE)
-            //.set_cull_mode(vk::CullModeFlags::NONE, vk::FrontFace::CLOCKWISE)
-            .set_multisampling_none()
-            .set_color_attachment_format(engine.draw_image.format)
-            .set_depth_attachment_format(engine.depth_image.format);
-
-        let pipeline_builder_transparent = pipeline_builder
-            .clone()
-            .enable_blending_additive()
-            .enable_depth_test(false, vk::CompareOp::GREATER_OR_EQUAL);
-
-        let pipeline_builder_opaque = pipeline_builder
-            .disable_blending()
-            .enable_depth_test(true, vk::CompareOp::GREATER_OR_EQUAL);
-
-        let opaque_pipeline = pipeline_builder_opaque
-            .build_pipeline(engine.base.device.clone())
-            .expect("failed to build opaque pipeline!");
-
-        let transparent_pipeline = pipeline_builder_transparent
-            .build_pipeline(engine.base.device.clone())
-            .expect("failed to build transparent pipeline!");
-
-        unsafe {
-            engine
-                .base
-                .device
-                .handle
-                .destroy_shader_module(mesh_vert_shader, None);
-            engine
-                .base
-                .device
-                .handle
-                .destroy_shader_module(mesh_frag_shader, None);
-        }
-
-        (opaque_pipeline, transparent_pipeline)
-    }
-
-    pub fn clear_resources() {}
-
-    pub fn write_material(
-        &self,
-        device: Arc<LogicalDevice>,
-        pass: MaterialPass,
-        resources: &MaterialResources,
-        descriptor_allocator: &mut DescriptorAllocatorGrowable,
-    ) -> MaterialInstance {
-        let pipeline = if pass == MaterialPass::Transparent {
-            self.transparent_pipeline.clone()
-        } else {
-            self.opaque_pipeline.clone()
-        };
-
-        let material_set = descriptor_allocator.allocate(self.material_layout.handle);
-
-        let mut desc_writer = DescriptorWriter::new();
-        desc_writer.write_buffer(
-            0,
-            resources.data_buffer,
-            size_of::<MaterialConstants>() as u64,
-            resources.data_buffer_offset,
-            descriptors::BufferDescriptorType::UniformBuffer,
-        );
-        desc_writer.write_image(
-            1,
-            resources.color_image.image_view,
-            resources.color_sampler.handle,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        );
-        desc_writer.write_image(
-            2,
-            resources.metal_rough_image.image_view,
-            resources.metal_rough_sampler.handle,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        );
-
-        desc_writer.update_set(device.clone(), material_set);
-
-        let mat_data = MaterialInstance {
-            pipeline,
-            material_set,
-            pass_type: pass,
-        };
-
-        mat_data
-    }
-}
-
-fn evaluate_relative_transforms(world: &mut World) {
-    let mut parents = world.query::<&ParentComponent>();
-    let parents = parents.view();
-
-    let mut roots = world
-        .query::<&TransformComponent>()
-        .without::<&ParentComponent>();
-    let roots = roots.view();
-
-    for (_entity, (parent, absolute)) in world
-        .query::<(&ParentComponent, &mut TransformComponent)>()
-        .iter()
-    {
-        let mut relative = parent.local_transform;
-        let mut ancestor = parent.parent;
-        while let Some(next) = parents.get(ancestor) {
-            relative = next.local_transform * relative;
-            ancestor = next.parent;
-        }
-        absolute.transform = roots.get(ancestor).unwrap().transform * relative;
-    }
-}
-
-fn draw_all(world: &mut World, top_matrix: &glam::Mat4, context: &mut DrawContext) {
-    for (_entity, (mesh_component, transform_component)) in world
-        .query::<(&MeshHandleComponent, &TransformComponent)>()
-        .iter()
-    {
-        let node_matrix = *top_matrix * transform_component.transform;
-        let (mut opaque_surfaces, mut transparent_surfaces) =
-            mesh_to_render_object(node_matrix, &mesh_component.mesh);
-        context.opaque_surfaces.append(&mut opaque_surfaces);
-        context
-            .transparent_surfaces
-            .append(&mut transparent_surfaces);
-    }
-}
-
-fn draw_entity(
-    world: &mut World,
-    draw_entity: Entity,
-    top_matrix: &glam::Mat4,
-    context: &mut DrawContext,
-) {
-    if let Some((_entity, (mesh_component, transform_component))) = world
-        .query::<(&MeshHandleComponent, &TransformComponent)>()
-        .iter()
-        .find(|(entity, _)| *entity == draw_entity)
-    {
-        let node_matrix = *top_matrix * transform_component.transform;
-        /*         for s in &mesh_component.mesh.surfaces {
-            let def = RenderObject {
-                index_count: s.count as u32,
-                first_index: s.start_index as u32,
-                index_buffer: mesh_component.mesh.mesh_buffers.index_buffer.buffer,
-                material: s.material.clone(),
-                transform: node_matrix,
-                vertex_buffer_address: mesh_component.mesh.mesh_buffers.vertex_buffer_address,
-            };
-            context.opaque_surfaces.push(def);
-        } */
-        let (mut opaque_surfaces, mut transparent_surfaces) =
-            mesh_to_render_object(node_matrix, &mesh_component.mesh);
-        context.opaque_surfaces.append(&mut opaque_surfaces);
-        context
-            .transparent_surfaces
-            .append(&mut transparent_surfaces);
-    }
-}
-
-fn draw_skybox_entity(
-    world: &mut World,
-    draw_entity: Entity,
-    top_matrix: &glam::Mat4,
-    context: &mut DrawContext,
-) {
-    if let Some((_entity, (mesh_component, transform_component))) = world
-        .query::<(&MeshHandleComponent, &TransformComponent)>()
-        .iter()
-        .find(|(entity, _)| *entity == draw_entity)
-    {
-        let node_matrix = *top_matrix * transform_component.transform;
-        let (mut opaque_surfaces, mut transparent_surfaces) =
-            mesh_to_render_object(node_matrix, &mesh_component.mesh);
-        context.skybox_surfaces.append(&mut opaque_surfaces);
-        context.skybox_surfaces.append(&mut transparent_surfaces);
-    }
-}
-
-fn mesh_to_render_object(
-    node_matrix: glam::Mat4,
-    mesh_asset: &Arc<MeshAsset>,
-) -> (Vec<RenderObject>, Vec<RenderObject>) {
-    let mut opaque_surfaces = vec![];
-    let mut transparent_surfaces = vec![];
-    for s in &mesh_asset.surfaces {
-        let def = RenderObject {
-            index_count: s.count as u32,
-            first_index: s.start_index as u32,
-            index_buffer: mesh_asset.mesh_buffers.index_buffer.buffer,
-            material: s.material.clone(),
-            transform: node_matrix,
-            vertex_buffer_address: mesh_asset.mesh_buffers.vertex_buffer_address,
-        };
-
-        match s.material.pass_type {
-            MaterialPass::MainColor => opaque_surfaces.push(def),
-            MaterialPass::Transparent => transparent_surfaces.push(def),
-            MaterialPass::Other => (),
-        }
-    }
-    (opaque_surfaces, transparent_surfaces)
-}
-
-#[derive(Debug, Copy, Clone, Default)]
-pub struct TransformComponent {
-    transform: glam::Mat4,
-}
-
-pub struct ParentComponent {
-    parent: Entity,
-    local_transform: glam::Mat4,
-}
-
-pub struct MeshHandleComponent {
-    mesh: Arc<MeshAsset>,
-}
-
-pub fn cmd_push_constants<T>(
-    device: Arc<LogicalDevice>,
-    cmd: vk::CommandBuffer,
-    pipeline_layout: Arc<PipelineLayout>,
-    push_constants: T,
-    stage_flags: vk::ShaderStageFlags,
-    offset: u32,
-) {
-    let pc = [push_constants];
-    unsafe {
-        let push = any_as_u8_slice(&pc);
-        device
-            .handle
-            .cmd_push_constants(cmd, pipeline_layout.handle, stage_flags, offset, &push)
-    };
 }

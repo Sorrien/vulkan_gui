@@ -4,7 +4,9 @@ use std::{
 };
 
 use ash::{
-    ext::debug_utils::{self, Instance as DebugUtils}, khr::surface::Instance as Surface, vk, Entry
+    ext::debug_utils::{self},
+    khr::surface::Instance as Surface,
+    vk, Entry,
 };
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 

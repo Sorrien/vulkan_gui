@@ -1,7 +1,5 @@
-use ash::ext::debug_utils::{self, Instance as DebugUtils};
-use ash::vk::StructureType;
+use ash::ext::debug_utils::Instance as DebugUtils;
 use ash::{vk, Entry};
-use std::any::Any;
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::sync::Arc;

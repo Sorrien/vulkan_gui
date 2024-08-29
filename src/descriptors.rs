@@ -1,6 +1,5 @@
-use std::{collections::VecDeque, sync::Arc};
-
 use ash::vk;
+use std::sync::Arc;
 
 use crate::ash_bootstrap::LogicalDevice;
 

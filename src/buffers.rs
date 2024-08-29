@@ -10,7 +10,7 @@ use gpu_allocator::{
     MemoryLocation,
 };
 
-use crate::{ash_bootstrap::LogicalDevice, MaterialInstance};
+use crate::ash_bootstrap::LogicalDevice;
 
 pub struct AllocatedBuffer {
     device: Arc<LogicalDevice>,
@@ -155,29 +155,6 @@ pub fn create_buffer_copy_region(
     buffer_image_copy
 }
 
-//#[repr(C)] keeps our Vertex in the correct format for our shaders.
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct Vertex {
-    pub position: glam::Vec3,
-    pub uv_x: f32,
-    pub normal: glam::Vec3,
-    pub uv_y: f32,
-    pub color: glam::Vec4,
-}
-
-impl Vertex {
-    pub fn new(position: glam::Vec3, color: glam::Vec4) -> Self {
-        Self {
-            position,
-            uv_x: 0.,
-            normal: glam::Vec3::new(1., 0., 0.),
-            uv_y: 0.,
-            color,
-        }
-    }
-}
-
 // Simple offset_of macro akin to C++ offsetof
 #[macro_export]
 macro_rules! offset_of {
@@ -190,39 +167,3 @@ macro_rules! offset_of {
     }};
 }
 pub use offset_of;
-
-#[derive(Clone)]
-pub struct GeoSurface {
-    pub start_index: usize,
-    pub count: usize,
-    pub material: Arc<MaterialInstance>,
-}
-
-pub struct MeshAsset {
-    pub name: String,
-
-    pub surfaces: Vec<GeoSurface>,
-    pub mesh_buffers: Arc<GPUMeshBuffers>,
-}
-
-pub struct GPUMeshBuffers {
-    pub index_buffer: AllocatedBuffer,
-    pub vertex_buffer: AllocatedBuffer,
-    pub vertex_buffer_address: vk::DeviceAddress,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct GPUDrawPushConstants {
-    world_matrix: glam::Mat4,
-    vertex_buffer: vk::DeviceAddress,
-}
-
-impl GPUDrawPushConstants {
-    pub fn new(world_matrix: glam::Mat4, vertex_buffer: vk::DeviceAddress) -> Self {
-        Self {
-            world_matrix,
-            vertex_buffer,
-        }
-    }
-}
