@@ -9,10 +9,14 @@ fn main() -> Result<(), winit::error::EventLoopError> {
 
 pub struct MyGuiApp {
     pub scale_float: f32,
+    pub always_update: bool,
 }
 impl MyGuiApp {
     pub fn new() -> Self {
-        Self { scale_float: 1.0 }
+        Self {
+            scale_float: 1.0,
+            always_update: false,
+        }
     }
 }
 
@@ -22,10 +26,24 @@ impl GuiApp for MyGuiApp {
             .size([500.0, 200.0], imgui::Condition::FirstUseEver)
             .build(|| {
                 ui.slider("Test Scale", 0.3, 1., &mut self.scale_float);
+                ui.checkbox("Enable automatic updates", &mut self.always_update);
             });
     }
-    
-    fn update(&mut self, vulkan_engine: &mut VulkanEngine, delta_time: std::time::Duration) -> bool {
-        false
+
+    fn update(
+        &mut self,
+        vulkan_engine: &mut VulkanEngine,
+        delta_time: std::time::Duration,
+    ) -> bool {
+        if self.always_update {
+            if self.scale_float >= 1. {
+                self.scale_float = 0.3;
+            } else {
+                self.scale_float += 0.01;
+            }
+            true
+        } else {
+            false
+        }
     }
 }

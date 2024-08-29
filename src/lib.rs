@@ -32,22 +32,34 @@ pub mod vk_imgui;
 const FRAME_OVERLAP: usize = 2;
 
 pub trait GuiApp {
+    fn update(&mut self, vulkan_engine: &mut VulkanEngine, delta_time: Duration) -> bool;
     fn ui(&mut self, ui: &mut imgui::Ui, vulkan_engine: &mut VulkanEngine);
 }
 
 pub struct VulkanGuiApp {
     application_title: String,
+    pub min_tick_time: u64,
+    pub max_tick_time: u64,
 }
 
 impl VulkanGuiApp {
     pub fn new(application_title: String) -> Self {
-        Self { application_title }
+        Self {
+            application_title,
+            min_tick_time: 16,
+            max_tick_time: 120,
+        }
     }
 
     pub fn run<T: GuiApp>(&mut self, app: T) -> Result<(), winit::error::EventLoopError> {
         let (event_loop, window) = VulkanEngine::init_window(3440, 1440, &self.application_title);
 
-        let mut vulkan_engine = VulkanEngine::new(window, self.application_title.clone());
+        let mut vulkan_engine = VulkanEngine::new(
+            window,
+            self.application_title.clone(),
+            self.min_tick_time,
+            self.max_tick_time,
+        );
         vulkan_engine.init_commands();
         let (imgui, winit_platform, imgui_renderer) = vulkan_engine.init_imgui();
 
@@ -56,6 +68,9 @@ impl VulkanGuiApp {
 }
 
 pub struct VulkanEngine {
+    pub max_tick_time: u64,
+    pub min_tick_time: u64,
+    pub is_focused: bool,
     pub draw_extent: vk::Extent2D,
     pub render_scale: f32,
     pub resize_requested: bool,
@@ -70,7 +85,12 @@ pub struct VulkanEngine {
 }
 
 impl VulkanEngine {
-    pub fn new(window: Window, application_title: String) -> Self {
+    pub fn new(
+        window: Window,
+        application_title: String,
+        min_tick_time: u64,
+        max_tick_time: u64,
+    ) -> Self {
         let mut base = BaseVulkanState::new(window, application_title);
 
         let window_size = base.window.inner_size();
@@ -117,6 +137,9 @@ impl VulkanEngine {
             resize_requested: false,
             draw_extent: draw_image_extent,
             render_scale: 1.,
+            is_focused: false,
+            min_tick_time,
+            max_tick_time,
         }
     }
 
@@ -181,9 +204,12 @@ impl VulkanEngine {
     ) -> Result<(), winit::error::EventLoopError> {
         let mut last_frame = Instant::now();
         let mut delta_time = Instant::now() - last_frame;
-        let min_tick_time = Duration::from_millis(29);
+        let min_tick_time = Duration::from_millis(self.min_tick_time);
+        let max_tick_time = Duration::from_millis(self.max_tick_time);
         let mut total_time_since_last_tick = delta_time;
         let mut num_ticks = 0;
+
+        let mut input_counter = 0;
 
         event_loop.run(move |event, elwt| {
             platform.handle_event(imgui.io_mut(), &self.base.window, &event);
@@ -224,25 +250,31 @@ impl VulkanEngine {
 
                     if self.resize_requested {
                         if size.width > 0 && size.height > 0 {
-                            //println!("resize requested!");
                             self.resize_swapchain();
                         } else {
                             return;
                         }
                     }
-                    platform
-                        .prepare_frame(imgui.io_mut(), &self.base.window)
-                        .expect("failed to prepare frame!");
-                    let ui = imgui.frame();
+                    let is_updated: bool = app.update(self, delta_time);
 
-                    app.ui(ui, self);
+                    if (total_time_since_last_tick >= min_tick_time
+                        && (is_updated || input_counter > 0))
+                        || total_time_since_last_tick >= max_tick_time
+                    {
+                        platform
+                            .prepare_frame(imgui.io_mut(), &self.base.window)
+                            .expect("failed to prepare frame!");
+                        let ui = imgui.frame();
 
-                    platform.prepare_render(ui, &self.base.window);
-                    let draw_data = imgui.render();
+                        app.ui(ui, self);
 
-                    if total_time_since_last_tick >= min_tick_time {
+                        platform.prepare_render(ui, &self.base.window);
+
+                        let draw_data = imgui.render();
+
                         total_time_since_last_tick = Duration::from_micros(0);
                         num_ticks += 1;
+                        input_counter = 0;
 
                         //don't attempt to draw a frame in window size is 0
                         if size.height > 0 && size.width > 0 {
@@ -254,14 +286,12 @@ impl VulkanEngine {
                     window_id: _,
                     event: WindowEvent::Focused(is_focused),
                 } => {
-                    //stop_rendering = !is_focused;
+                    self.is_focused = is_focused;
                 }
                 Event::WindowEvent {
                     window_id: _,
                     event: WindowEvent::Resized(_new_size),
-                } => {
-                    //self.framebuffer_resized = true;
-                }
+                } => {}
                 Event::DeviceEvent {
                     device_id,
                     event:
@@ -269,8 +299,17 @@ impl VulkanEngine {
                             delta: (delta_x, delta_y),
                         },
                 } => {
-                    //self.camera
-                    //    .process_mouse_input_event(delta_x as f32, delta_y as f32);
+                    if self.is_focused {
+                        input_counter += 1;
+                    }
+                }
+                Event::DeviceEvent {
+                    device_id,
+                    event: DeviceEvent::Button { button, state },
+                } => {
+                    if self.is_focused {
+                        input_counter += 1;
+                    }
                 }
                 Event::WindowEvent {
                     window_id,
@@ -281,7 +320,9 @@ impl VulkanEngine {
                             is_synthetic,
                         },
                 } => {
-                    //self.camera.process_keyboard_input_event(event);
+                    if self.is_focused {
+                        input_counter += 1;
+                    }
                 }
                 _ => (),
             }
