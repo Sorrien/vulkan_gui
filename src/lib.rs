@@ -378,7 +378,7 @@ impl VulkanEngine {
             * self.render_scale) as u32;
 
         //acquire next swapchain image
-        let (swapchain_image_index, _) = unsafe {
+        let swapchain_image_index = unsafe {
             let result = swapchain.swapchain_loader.acquire_next_image(
                 swapchain.swapchain,
                 u64::MAX,
@@ -387,8 +387,13 @@ impl VulkanEngine {
             );
 
             match result {
-                Ok((image_index, was_next_image_acquired)) => {
-                    (image_index, was_next_image_acquired)
+                Ok((image_index, is_suboptimal)) => {
+                    if is_suboptimal {
+                        self.resize_requested = true;
+                        return;
+                    } else {
+                        image_index
+                    }
                 }
                 Err(vk_result) => match vk_result {
                     vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => {
@@ -514,7 +519,11 @@ impl VulkanEngine {
                 .queue_present(self.base.graphics_queue, &present_info)
         };
         match present_result {
-            Ok(_) => (),
+            Ok(is_suboptimal) => {
+                if is_suboptimal {
+                    self.resize_requested = true;
+                }
+            }
             Err(vk_result) => match vk_result {
                 vk::Result::ERROR_OUT_OF_DATE_KHR | vk::Result::SUBOPTIMAL_KHR => {
                     self.resize_requested = true;
