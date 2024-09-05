@@ -39,6 +39,7 @@ pub struct VulkanGuiApp {
     application_title: String,
     pub min_tick_time: u64,
     pub max_tick_time: u64,
+    pub font_size: f64,
 }
 
 impl VulkanGuiApp {
@@ -47,6 +48,7 @@ impl VulkanGuiApp {
             application_title,
             min_tick_time: 16,
             max_tick_time: 120,
+            font_size: 13.0,
         }
     }
 
@@ -60,7 +62,7 @@ impl VulkanGuiApp {
             self.max_tick_time,
         );
         vulkan_engine.init_commands();
-        let (imgui, winit_platform, imgui_renderer) = vulkan_engine.init_imgui();
+        let (imgui, winit_platform, imgui_renderer) = vulkan_engine.init_imgui(self.font_size);
 
         vulkan_engine.run(event_loop, imgui, winit_platform, imgui_renderer, app)
     }
@@ -148,6 +150,7 @@ impl VulkanEngine {
 
     pub fn init_imgui(
         &self,
+        font_size: f64,
     ) -> (
         imgui::Context,
         imgui_winit_support::WinitPlatform,
@@ -160,6 +163,7 @@ impl VulkanEngine {
             self.base.graphics_queue,
             self.immediate_command.command_pool,
             self.swapchain.format,
+            font_size,
         )
     }
 
@@ -223,13 +227,12 @@ impl VulkanEngine {
                     delta_time = now - last_frame;
 
                     total_time_since_last_tick += delta_time;
-
                     imgui.io_mut().update_delta_time(delta_time);
                     last_frame = now;
                 }
                 Event::WindowEvent {
-                    event: WindowEvent::Resized(_),
-                    ..
+                    window_id: _,
+                    event: WindowEvent::Resized(_new_size),
                 } => {
                     self.resize_requested = true;
                 }
@@ -291,15 +294,11 @@ impl VulkanEngine {
                 } => {
                     self.is_focused = is_focused;
                 }
-                Event::WindowEvent {
-                    window_id: _,
-                    event: WindowEvent::Resized(_new_size),
-                } => {}
                 Event::DeviceEvent {
                     device_id,
                     event:
                         DeviceEvent::MouseMotion {
-                            delta: (delta_x, delta_y),
+                            delta: (_delta_x, _delta_y),
                         },
                 } => {
                     if self.is_focused

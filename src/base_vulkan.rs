@@ -10,17 +10,12 @@ use crate::{
     buffers::AllocatedBuffer,
     debug,
     descriptors::{
-        Descriptor, DescriptorAllocatorGrowable, DescriptorLayout, DescriptorLayoutBuilder,
-        DescriptorWriter, PoolSizeRatio,
+        Descriptor, DescriptorAllocatorGrowable, DescriptorLayoutBuilder, DescriptorWriter,
+        PoolSizeRatio,
     },
     swapchain, AllocatedImage,
 };
-use ash::{
-    //extensions::khr::Swapchain,
-    util::read_spv,
-    vk,
-    Entry,
-};
+use ash::{util::read_spv, vk, Entry};
 use ash_bootstrap::{
     self, swapchain::SwapchainSupportDetails, Instance, InstanceBuilder, LogicalDevice,
     PhysicalDeviceSelector, QueueFamilyIndices, VulkanSurface,
