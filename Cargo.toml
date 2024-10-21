@@ -19,9 +19,9 @@ ash-window = { version = "0.13" }
 chrono = "0.4"
 image = "0.24"
 gpu-allocator = { version = "0.27.0", features = ["vulkan"] }
-imgui = { git = "https://github.com/imgui-rs/imgui-rs" }
-imgui-winit-support = { git = "https://github.com/imgui-rs/imgui-rs" }
-imgui-rs-vulkan-renderer = { git = "https://github.com/Sorrien/imgui-rs-vulkan-renderer/", features = [
+imgui = { version = "0.12" }
+imgui-winit-support = { version = "0.12.0" }
+imgui-rs-vulkan-renderer = { version = "1.16", features = [
     "gpu-allocator",
     "dynamic-rendering",
 ] }

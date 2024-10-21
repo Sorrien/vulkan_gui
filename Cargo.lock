@@ -664,7 +664,8 @@ dependencies = [
 [[package]]
 name = "imgui"
 version = "0.12.0"
-source = "git+https://github.com/imgui-rs/imgui-rs#67f7f11363e62f09aa0e1288a17800e505860486"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8addafa5cecf0515812226e806913814e02ce38d10215778082af5174abe5669"
 dependencies = [
  "bitflags 1.3.2",
  "cfg-if",
@@ -675,8 +676,9 @@ dependencies = [
 
 [[package]]
 name = "imgui-rs-vulkan-renderer"
-version = "1.12.0"
-source = "git+https://github.com/Sorrien/imgui-rs-vulkan-renderer/#5936bc90782769c2204af0ee3de8f9420b3737b8"
+version = "1.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8e04126b715ff7ce1dc9fcb5254254e90449601fcdb2b5ac93a28c6ea635c80"
 dependencies = [
  "ash",
  "gpu-allocator",
@@ -689,7 +691,8 @@ dependencies = [
 [[package]]
 name = "imgui-sys"
 version = "0.12.0"
-source = "git+https://github.com/imgui-rs/imgui-rs#67f7f11363e62f09aa0e1288a17800e505860486"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ead193f9f4b60398e8b8f4ab1483e2321640d87aeebdaa3e5f44c55633ccd804"
 dependencies = [
  "cc",
  "cfg-if",
@@ -700,7 +703,8 @@ dependencies = [
 [[package]]
 name = "imgui-winit-support"
 version = "0.12.0"
-source = "git+https://github.com/imgui-rs/imgui-rs#67f7f11363e62f09aa0e1288a17800e505860486"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e3c00d50ebf207505ea6bc9a5cdafb33c1d14a8fe854fff1fa3542f013f3952"
 dependencies = [
  "imgui",
  "winit",
