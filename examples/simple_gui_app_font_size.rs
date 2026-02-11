@@ -18,7 +18,7 @@ impl MyGuiApp {
 }
 
 impl GuiApp for MyGuiApp {
-    fn ui(&mut self, ui: &mut imgui::Ui, vulkan_engine: &mut VulkanEngine) {
+    fn ui(&mut self, ui: &mut imgui::Ui, _vulkan_engine: &mut VulkanEngine) {
         ui.window("background")
             .size([500.0, 200.0], imgui::Condition::FirstUseEver)
             .build(|| {
@@ -26,7 +26,7 @@ impl GuiApp for MyGuiApp {
             });
     }
     
-    fn update(&mut self, vulkan_engine: &mut VulkanEngine, delta_time: std::time::Duration) -> bool {
+    fn update(&mut self, _vulkan_engine: &mut VulkanEngine, _delta_time: std::time::Duration) -> bool {
         false
     }
 }

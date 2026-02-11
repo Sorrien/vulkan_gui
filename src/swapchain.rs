@@ -202,7 +202,7 @@ impl SwapchainBuilder {
     fn choose_swapchain_surface_format<'a>(
         &'a self,
         available_formats: &'a Vec<vk::SurfaceFormatKHR>,
-    ) -> Option<&vk::SurfaceFormatKHR> {
+    ) -> Option<&'a vk::SurfaceFormatKHR> {
         if let Some(desired_format) = available_formats.iter().find(|surface_format| {
             surface_format.color_space == self.desired_surface_format.color_space
                 && surface_format.format == self.desired_surface_format.format

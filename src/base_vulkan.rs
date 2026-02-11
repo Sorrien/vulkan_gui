@@ -22,7 +22,7 @@ use ash_bootstrap::{
 };
 use debug::DebugMessenger;
 use gpu_allocator::{vulkan::*, MemoryLocation};
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use swapchain::{MySwapchain, SwapchainBuilder};
 use winit::window::Window;
 
@@ -56,12 +56,14 @@ impl BaseVulkanState {
         #[cfg(not(feature = "validation_layers"))]
         let enable_validation_layers = false;
 
+        let raw_display_handle = window.display_handle().unwrap().as_raw();
+        let raw_window_handle = window.window_handle().unwrap().as_raw();
         let entry = unsafe { ash::Entry::load() }.expect("vulkan entry failed to load!");
         let instance = InstanceBuilder::new()
             .entry(entry.clone())
             .application_name(application_title)
             .api_version(vk::API_VERSION_1_3)
-            .raw_display_handle(window.raw_display_handle().unwrap())
+            .raw_display_handle(raw_display_handle)
             .enable_validation_layers(enable_validation_layers)
             .debug_utils(debug::create_debug_info())
             .build();
@@ -72,8 +74,8 @@ impl BaseVulkanState {
         let surface = VulkanSurface::new(
             &entry,
             instance.clone(),
-            window.raw_display_handle().unwrap(),
-            window.raw_window_handle().unwrap(),
+            raw_display_handle,
+            raw_window_handle,
         )
         .expect("failed to create window surface!");
 
@@ -105,8 +107,8 @@ impl BaseVulkanState {
             &bootstrap_physical_device.queue_family_indices,
             required_extensions,
             device_features,
-            features12,
-            features13,
+            vec![Box::new(features12), Box::new(features13)],
+            vk::DeviceCreateFlags::empty(),
         )
         .expect("failed to create logical device!");
 
@@ -193,7 +195,7 @@ impl BaseVulkanState {
 
     pub fn create_frame_data(&self, count: usize) -> Vec<Arc<Mutex<FrameData>>> {
         (0..count)
-            .map(|i| {
+            .map(|_| {
                 let command_pool = self
                     .create_command_pool(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
                     .expect("failed to create command pool!");

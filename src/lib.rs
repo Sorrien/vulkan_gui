@@ -8,14 +8,14 @@ use ash::vk::{self};
 use ash_bootstrap::LogicalDevice;
 use base_vulkan::{BaseVulkanState, FrameData};
 use buffers::{copy_buffer_to_image, copy_to_cpu_buffer};
-use descriptors::{Descriptor, DescriptorAllocatorGrowable, DescriptorLayout};
+use descriptors::{Descriptor, DescriptorAllocatorGrowable};
 use gpu_allocator::{vulkan::*, MemoryLocation};
 use swapchain::MySwapchain;
 use vk_imgui::init_imgui;
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
     event_loop::EventLoop,
-    window::{Window, WindowBuilder},
+    window::{WindowBuilder},
 };
 
 pub use imgui::*;
@@ -68,6 +68,7 @@ impl VulkanGuiApp {
     }
 }
 
+#[allow(unused)]
 pub struct VulkanEngine {
     pub is_right_mouse_button_pressed: bool,
     pub is_left_mouse_button_pressed: bool,
@@ -89,7 +90,7 @@ pub struct VulkanEngine {
 
 impl VulkanEngine {
     pub fn new(
-        window: Window,
+        window: crate::window::Window,
         application_title: String,
         min_tick_time: u64,
         max_tick_time: u64,
@@ -214,7 +215,7 @@ impl VulkanEngine {
         let min_tick_time = Duration::from_millis(self.min_tick_time);
         let max_tick_time = Duration::from_millis(self.max_tick_time);
         let mut total_time_since_last_tick = delta_time;
-        let mut num_ticks = 0;
+        let mut _num_ticks = 0;
 
         let mut input_counter = 0;
 
@@ -279,7 +280,7 @@ impl VulkanEngine {
                         let draw_data = imgui.render();
 
                         total_time_since_last_tick = Duration::from_micros(0);
-                        num_ticks += 1;
+                        _num_ticks += 1;
                         input_counter = 0;
 
                         //don't attempt to draw a frame in window size is 0
@@ -295,7 +296,7 @@ impl VulkanEngine {
                     self.is_focused = is_focused;
                 }
                 Event::DeviceEvent {
-                    device_id,
+                    device_id: _,
                     event:
                         DeviceEvent::MouseMotion {
                             delta: (_delta_x, _delta_y),
@@ -308,7 +309,7 @@ impl VulkanEngine {
                     }
                 }
                 Event::DeviceEvent {
-                    device_id,
+                    device_id: _,
                     event: DeviceEvent::MouseWheel { delta: _ },
                 } => {
                     if self.is_focused {
@@ -316,7 +317,7 @@ impl VulkanEngine {
                     }
                 }
                 Event::DeviceEvent {
-                    device_id,
+                    device_id: _,
                     event: DeviceEvent::Button { button, state },
                 } => {
                     if self.is_focused {
@@ -329,12 +330,12 @@ impl VulkanEngine {
                     }
                 }
                 Event::WindowEvent {
-                    window_id,
+                    window_id: _,
                     event:
                         WindowEvent::KeyboardInput {
-                            device_id,
-                            event,
-                            is_synthetic,
+                            device_id: _,
+                            event: _,
+                            is_synthetic: _,
                         },
                 } => {
                     if self.is_focused {
@@ -748,6 +749,7 @@ pub struct Sampler {
     pub handle: vk::Sampler,
 }
 
+#[allow(unused)]
 impl Sampler {
     fn new(handle: vk::Sampler, device: Arc<LogicalDevice>) -> Self {
         Self { handle, device }
