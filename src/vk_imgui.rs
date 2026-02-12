@@ -3,8 +3,9 @@ use std::sync::{Arc, Mutex};
 use crate::FRAME_OVERLAP;
 use ash::vk;
 use ash_bootstrap::LogicalDevice;
+use clipboard_rs::{Clipboard, ClipboardContext};
 use gpu_allocator::vulkan::Allocator;
-use imgui::FontConfig;
+use imgui::{ClipboardBackend, FontConfig};
 use imgui_rs_vulkan_renderer::DynamicRendering;
 use winit::window::Window;
 
@@ -42,6 +43,7 @@ pub fn init_imgui(
 
     imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
     platform.attach_window(imgui.io_mut(), window, dpi_mode);
+    imgui.set_clipboard_backend(VKEngineClipboard::new());
 
     let renderer = imgui_rs_vulkan_renderer::Renderer::with_gpu_allocator(
         allocator.clone(),
@@ -61,4 +63,35 @@ pub fn init_imgui(
     .unwrap();
 
     (imgui, platform, renderer)
+}
+
+pub struct VKEngineClipboard {
+    ctx: ClipboardContext,
+}
+
+impl VKEngineClipboard {
+    pub fn new() -> Self {
+        Self {
+            ctx: ClipboardContext::new().unwrap(),
+        }
+    }
+}
+
+impl ClipboardBackend for VKEngineClipboard {
+    fn get(&mut self) -> Option<String> {
+        match self.ctx.get_text() {
+            Ok(text) => Some(text),
+            Err(err) => {
+                println!("Clipboard error: {}", err);
+                None
+            }
+        }
+    }
+
+    fn set(&mut self, value: &str) {
+        match self.ctx.set_text(value.to_string()) {
+            Ok(_) => (),
+            Err(err) => println!("Clipboard error: {}", err),
+        }
+    }
 }

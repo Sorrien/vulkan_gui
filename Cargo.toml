@@ -27,6 +27,7 @@ imgui-rs-vulkan-renderer = { version = "1.16", features = [
 ] }
 nanoid = "0.4.0"
 ash_bootstrap = { git = "https://github.com/Sorrien/ash_bootstrap/" }
+clipboard-rs = "0.3.2"
 
 [dependencies.gltf]
 version = "1"
