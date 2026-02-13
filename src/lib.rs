@@ -15,7 +15,7 @@ use vk_imgui::init_imgui;
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
     event_loop::EventLoop,
-    window::WindowBuilder,
+    window::WindowAttributes,
 };
 
 pub use imgui::*;
@@ -190,11 +190,13 @@ impl VulkanEngine {
         title: &str,
     ) -> (EventLoop<()>, winit::window::Window) {
         let event_loop = EventLoop::new().unwrap();
-        let window = WindowBuilder::new()
+
+        let window_attr = WindowAttributes::default()
             .with_title(title)
-            .with_inner_size(winit::dpi::LogicalSize::new(width, height))
-            .build(&event_loop)
-            .unwrap();
+            .with_inner_size(winit::dpi::LogicalSize::new(width, height));
+
+        #[allow(deprecated)]
+        let window = event_loop.create_window(window_attr).unwrap();
 
         (event_loop, window)
     }
@@ -232,6 +234,7 @@ impl VulkanEngine {
 
         let mut input_counter = 0;
 
+        #[allow(deprecated)]
         event_loop.run(move |event, elwt| {
             platform.handle_event(imgui.io_mut(), &self.base.window, &event);
 
@@ -288,9 +291,7 @@ impl VulkanEngine {
                             let is_updated: bool = app.update(self, delta_time);
 
                             if (total_time_since_last_tick >= min_tick_time
-                                && (is_updated
-                                    || input_counter > 0
-                                    || (imgui.io().keys_down.iter().any(|x| *x))))
+                                && (is_updated || input_counter > 0))
                                 || total_time_since_last_tick >= max_tick_time
                             {
                                 true
@@ -379,9 +380,7 @@ impl VulkanEngine {
             }
 
             if self.loop_mode == LoopMode::EventDriven
-                && (input_counter > 0
-                    || ((imgui.io().keys_down.iter().any(|x| *x) || needs_update)
-                        && self.is_focused))
+                && (input_counter > 0 || needs_update && self.is_focused)
             {
                 self.base.window.request_redraw();
             }

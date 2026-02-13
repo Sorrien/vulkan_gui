@@ -26,7 +26,7 @@ pub fn init_imgui(
 
     imgui.set_ini_filename(None);
 
-    let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
+    let mut platform = imgui_winit_support::WinitPlatform::new(&mut imgui);
     let dpi_mode = imgui_winit_support::HiDpiMode::Rounded;
 
     let hidpi_factor = platform.hidpi_factor();
