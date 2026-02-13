@@ -336,9 +336,7 @@ impl VulkanEngine {
                             delta: (_delta_x, _delta_y),
                         },
                 } => {
-                    if self.is_focused
-                        && (self.is_left_mouse_button_pressed || self.is_right_mouse_button_pressed)
-                    {
+                    if self.is_focused {
                         input_counter += 1;
                     }
                 }
@@ -380,7 +378,7 @@ impl VulkanEngine {
             }
 
             if self.loop_mode == LoopMode::EventDriven
-                && (input_counter > 0 || needs_update && self.is_focused)
+                && ((input_counter > 0 || needs_update) && self.is_focused)
             {
                 self.base.window.request_redraw();
             }
