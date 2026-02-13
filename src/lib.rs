@@ -15,7 +15,7 @@ use vk_imgui::init_imgui;
 use winit::{
     event::{DeviceEvent, Event, WindowEvent},
     event_loop::EventLoop,
-    window::{WindowBuilder},
+    window::WindowBuilder,
 };
 
 pub use imgui::*;
@@ -30,6 +30,12 @@ pub mod vk_imgui;
 
 const FRAME_OVERLAP: usize = 2;
 
+#[derive(PartialEq, Copy, Clone)]
+pub enum LoopMode {
+    EventDriven,
+    Loop,
+}
+
 pub trait GuiApp {
     fn update(&mut self, vulkan_engine: &mut VulkanEngine, delta_time: Duration) -> bool;
     fn ui(&mut self, ui: &mut imgui::Ui, vulkan_engine: &mut VulkanEngine);
@@ -40,6 +46,7 @@ pub struct VulkanGuiApp {
     pub min_tick_time: u64,
     pub max_tick_time: u64,
     pub font_size: f64,
+    pub loop_mode: LoopMode,
 }
 
 impl VulkanGuiApp {
@@ -49,6 +56,7 @@ impl VulkanGuiApp {
             min_tick_time: 16,
             max_tick_time: 120,
             font_size: 13.0,
+            loop_mode: LoopMode::EventDriven,
         }
     }
 
@@ -60,6 +68,7 @@ impl VulkanGuiApp {
             self.application_title.clone(),
             self.min_tick_time,
             self.max_tick_time,
+            self.loop_mode,
         );
         vulkan_engine.init_commands();
         let (imgui, winit_platform, imgui_renderer) = vulkan_engine.init_imgui(self.font_size);
@@ -86,6 +95,7 @@ pub struct VulkanEngine {
     frames: Vec<Arc<Mutex<FrameData>>>,
     pub swapchain: MySwapchain,
     base: BaseVulkanState,
+    loop_mode: LoopMode,
 }
 
 impl VulkanEngine {
@@ -94,6 +104,7 @@ impl VulkanEngine {
         application_title: String,
         min_tick_time: u64,
         max_tick_time: u64,
+        loop_mode: LoopMode,
     ) -> Self {
         let mut base = BaseVulkanState::new(window, application_title);
 
@@ -146,6 +157,7 @@ impl VulkanEngine {
             max_tick_time,
             is_right_mouse_button_pressed: false,
             is_left_mouse_button_pressed: false,
+            loop_mode,
         }
     }
 
@@ -216,6 +228,7 @@ impl VulkanEngine {
         let max_tick_time = Duration::from_millis(self.max_tick_time);
         let mut total_time_since_last_tick = delta_time;
         let mut _num_ticks = 0;
+        let mut needs_update = false;
 
         let mut input_counter = 0;
 
@@ -230,6 +243,10 @@ impl VulkanEngine {
                     total_time_since_last_tick += delta_time;
                     imgui.io_mut().update_delta_time(delta_time);
                     last_frame = now;
+
+                    if self.loop_mode == LoopMode::EventDriven {
+                        needs_update = app.update(self, delta_time);
+                    }
                 }
                 Event::WindowEvent {
                     window_id: _,
@@ -247,7 +264,9 @@ impl VulkanEngine {
                 }
                 Event::AboutToWait => {
                     //AboutToWait is the new MainEventsCleared
-                    self.base.window.request_redraw();
+                    if self.loop_mode == LoopMode::Loop {
+                        self.base.window.request_redraw();
+                    }
                 }
                 Event::WindowEvent {
                     event: WindowEvent::RedrawRequested,
@@ -262,12 +281,26 @@ impl VulkanEngine {
                             return;
                         }
                     }
-                    let is_updated: bool = app.update(self, delta_time);
 
-                    if (total_time_since_last_tick >= min_tick_time
-                        && (is_updated || input_counter > 0))
-                        || total_time_since_last_tick >= max_tick_time
-                    {
+                    let should_update = match self.loop_mode {
+                        LoopMode::EventDriven => true,
+                        LoopMode::Loop => {
+                            let is_updated: bool = app.update(self, delta_time);
+
+                            if (total_time_since_last_tick >= min_tick_time
+                                && (is_updated
+                                    || input_counter > 0
+                                    || (imgui.io().keys_down.iter().any(|x| *x))))
+                                || total_time_since_last_tick >= max_tick_time
+                            {
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    };
+
+                    if should_update {
                         platform
                             .prepare_frame(imgui.io_mut(), &self.base.window)
                             .expect("failed to prepare frame!");
@@ -343,6 +376,14 @@ impl VulkanEngine {
                     }
                 }
                 _ => (),
+            }
+
+            if self.loop_mode == LoopMode::EventDriven
+                && (input_counter > 0
+                    || ((imgui.io().keys_down.iter().any(|x| *x) || needs_update)
+                        && self.is_focused))
+            {
+                self.base.window.request_redraw();
             }
         })
     }
